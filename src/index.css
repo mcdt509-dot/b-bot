@@ -1,0 +1,101 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
+:root {
+  --bg: #050505;
+  --ink: #e5e5e5;
+  --line: #1a1a1a;
+  --accent: #10b981; /* Emerald */
+  --accent-glow: rgba(16, 185, 129, 0.15);
+  --accent-muted: #064e3b;
+}
+
+body {
+  background-color: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+.technical-grid {
+  background-image: 
+    linear-gradient(var(--line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--line) 1px, transparent 1px);
+  background-size: 40px 40px;
+  background-position: center;
+}
+
+.glow-text {
+  text-shadow: 0 0 10px var(--accent-glow);
+}
+
+.glow-border {
+  box-shadow: 0 0 15px var(--accent-glow);
+}
+
+.data-row {
+  border-bottom: 1px solid var(--line);
+  transition: background 0.2s ease;
+}
+
+.data-row:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.mono {
+  font-family: var(--font-mono);
+}
+
+.prose-invert {
+  --tw-prose-body: #d4d4d4;
+  --tw-prose-headings: #ffffff;
+  --tw-prose-links: #10b981;
+  --tw-prose-bold: #ffffff;
+  --tw-prose-counters: #737373;
+  --tw-prose-bullets: #404040;
+  --tw-prose-hr: #262626;
+  --tw-prose-quotes: #f5f5f5;
+  --tw-prose-quote-borders: #10b981;
+  --tw-prose-captions: #a3a3a3;
+  --tw-prose-code: #ffffff;
+  --tw-prose-pre-code: #d4d4d4;
+  --tw-prose-pre-bg: #171717;
+  --tw-prose-th-borders: #404040;
+  --tw-prose-td-borders: #262626;
+}
+
+.prose h1, .prose h2, .prose h3 {
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: -0.025em;
+  font-style: italic;
+}
+
+/* Custom Scrollbar */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: #050505;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #1a1a1a;
+  border-radius: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #10b981;
+}
+
+/* Firefox */
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #1a1a1a #050505;
+}
