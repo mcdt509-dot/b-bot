@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Shield, Key, Save, Loader2, CheckCircle2, AlertCircle, Eye, EyeOff, Cpu, Globe, Lock, Power, Zap, Activity, ShieldCheck, ShieldAlert } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Shield, Key, Save, Loader2, CheckCircle2, AlertCircle, Eye, EyeOff, Cpu, Globe, Lock, Power, Zap, Activity, ShieldCheck, ShieldAlert, Download } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -15,10 +15,39 @@ interface SettingsProps {
 
 export default function Settings({ vpnActive, setVpnActive }: SettingsProps) {
   const [stripeKey, setStripeKey] = useState('');
+  const [stripePubKey, setStripePubKey] = useState('');
+  const [stripeMerchantKey, setStripeMerchantKey] = useState('');
+  const [stripeWebhookSecret, setStripeWebhookSecret] = useState('');
   const [showKey, setShowKey] = useState(false);
+  const [showWebhookSecret, setShowWebhookSecret] = useState(false);
   const [status, setStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
   const [message, setMessage] = useState('');
+
+  const [customApiKey, setCustomApiKey] = useState('');
+  const [showCustomKey, setShowCustomKey] = useState(false);
+  const [customStatus, setCustomStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
+  const [customMessage, setCustomMessage] = useState('');
+
   const [proxyUrl, setProxyUrl] = useState('socks5://proxy.neural-tunnel.io:9050');
+
+  useEffect(() => {
+    const fetchConfig = async () => {
+      try {
+        const response = await fetch('/api/settings/config');
+        if (response.ok) {
+          const data = await response.json();
+          if (data.stripeKey) setStripeKey(data.stripeKey);
+          if (data.stripePubKey) setStripePubKey(data.stripePubKey);
+          if (data.stripeMerchantKey) setStripeMerchantKey(data.stripeMerchantKey);
+          if (data.stripeWebhookSecret) setStripeWebhookSecret(data.stripeWebhookSecret);
+          if (data.customApiKey) setCustomApiKey(data.customApiKey);
+        }
+      } catch (error) {
+        console.error("Failed to fetch configuration:", error);
+      }
+    };
+    fetchConfig();
+  }, []);
 
   const validateStripeKey = (key: string) => {
     if (!key) return { valid: true, msg: '' };
@@ -41,17 +70,70 @@ export default function Settings({ vpnActive, setVpnActive }: SettingsProps) {
     return { valid: true, msg: '' };
   };
 
+  const validateStripePubKey = (key: string) => {
+    if (!key) return { valid: true, msg: '' };
+    const isTest = key.startsWith('pk_test_');
+    const isLive = key.startsWith('pk_live_');
+    
+    if (!isTest && !isLive) {
+      return { valid: false, msg: 'Key must start with pk_test_ or pk_live_' };
+    }
+    
+    if (key.length < 20) {
+      return { valid: false, msg: 'Key is too short (min 20 chars)' };
+    }
+
+    return { valid: true, msg: '' };
+  };
+
+  const validateStripeMerchantKey = (key: string) => {
+    if (!key) return { valid: true, msg: '' };
+    if (!key.startsWith('mk_')) {
+      return { valid: false, msg: 'Merchant key must start with mk_' };
+    }
+    if (key.length < 15) {
+      return { valid: false, msg: 'Key is too short' };
+    }
+    return { valid: true, msg: '' };
+  };
+
+  const validateStripeWebhookSecret = (key: string) => {
+    if (!key) return { valid: true, msg: '' };
+    if (!key.startsWith('whsec_')) {
+      return { valid: false, msg: 'Webhook secret must start with whsec_' };
+    }
+    return { valid: true, msg: '' };
+  };
+
+  const validateCustomKey = (key: string) => {
+    if (!key) return { valid: true, msg: '' };
+    
+    if (key.length < 16) {
+      return { valid: false, msg: 'Key is too short (min 16 chars)' };
+    }
+
+    if (!/^[a-zA-Z0-9_\-]+$/.test(key)) {
+      return { valid: false, msg: 'Invalid characters (use alphanumeric, _ or -)' };
+    }
+
+    return { valid: true, msg: '' };
+  };
+
   const validation = validateStripeKey(stripeKey);
+  const pubKeyValidation = validateStripePubKey(stripePubKey);
+  const merchantKeyValidation = validateStripeMerchantKey(stripeMerchantKey);
+  const webhookSecretValidation = validateStripeWebhookSecret(stripeWebhookSecret);
+  const customValidation = validateCustomKey(customApiKey);
 
   const handleSave = async () => {
-    if (!stripeKey.trim() || !validation.valid) return;
+    if (!stripeKey.trim() || !validation.valid || !pubKeyValidation.valid || !merchantKeyValidation.valid || !webhookSecretValidation.valid) return;
     
     setStatus('saving');
     try {
       const response = await fetch('/api/settings/save-config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ stripeKey })
+        body: JSON.stringify({ stripeKey, stripePubKey, stripeMerchantKey, stripeWebhookSecret })
       });
 
       const result = await response.json();
@@ -65,6 +147,31 @@ export default function Settings({ vpnActive, setVpnActive }: SettingsProps) {
     } catch (error) {
       setStatus('error');
       setMessage('Network error occurred');
+    }
+  };
+
+  const handleSaveCustom = async () => {
+    if (!customApiKey.trim() || !customValidation.valid) return;
+    
+    setCustomStatus('saving');
+    try {
+      const response = await fetch('/api/settings/save-config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ customApiKey })
+      });
+
+      const result = await response.json();
+      if (response.ok) {
+        setCustomStatus('success');
+        setCustomMessage(result.message);
+      } else {
+        setCustomStatus('error');
+        setCustomMessage(result.error || 'Failed to save custom API key');
+      }
+    } catch (error) {
+      setCustomStatus('error');
+      setCustomMessage('Network error occurred');
     }
   };
 
@@ -143,6 +250,115 @@ export default function Settings({ vpnActive, setVpnActive }: SettingsProps) {
                   </div>
                 </div>
 
+                <div className="space-y-3">
+                  <div className="flex justify-between items-end">
+                    <label className="text-[10px] font-mono text-neutral-500 uppercase tracking-[0.2em]">Stripe_Publishable_Key</label>
+                  </div>
+                  <div className="relative group">
+                    <div className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-600 group-focus-within:text-emerald-500 transition-colors">
+                      <Globe className="w-5 h-5" />
+                    </div>
+                    <input 
+                      type="text"
+                      value={stripePubKey}
+                      onChange={(e) => setStripePubKey(e.target.value)}
+                      placeholder="pk_test_..."
+                      className={cn(
+                        "w-full bg-black/60 border rounded-xl pl-12 pr-4 py-4 font-mono text-sm outline-none transition-all placeholder:text-neutral-800 selection:bg-emerald-500/20",
+                        stripePubKey && !pubKeyValidation.valid ? "border-red-500/50 text-red-500" : "border-neutral-800 text-emerald-500 focus:border-emerald-500"
+                      )}
+                    />
+                  </div>
+                  <AnimatePresence>
+                    {stripePubKey && !pubKeyValidation.valid && (
+                      <motion.div 
+                        initial={{ opacity: 0, y: -5 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -5 }}
+                        className="flex items-center gap-2 text-[9px] font-mono text-red-500 uppercase tracking-wider"
+                      >
+                        <AlertCircle className="w-3 h-3" />
+                        {pubKeyValidation.msg}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+
+                <div className="space-y-3">
+                  <div className="flex justify-between items-end">
+                    <label className="text-[10px] font-mono text-neutral-500 uppercase tracking-[0.2em]">Stripe_Merchant_Key</label>
+                  </div>
+                  <div className="relative group">
+                    <div className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-600 group-focus-within:text-emerald-500 transition-colors">
+                      <Zap className="w-5 h-5" />
+                    </div>
+                    <input 
+                      type="text"
+                      value={stripeMerchantKey}
+                      onChange={(e) => setStripeMerchantKey(e.target.value)}
+                      placeholder="mk_..."
+                      className={cn(
+                        "w-full bg-black/60 border rounded-xl pl-12 pr-4 py-4 font-mono text-sm outline-none transition-all placeholder:text-neutral-800 selection:bg-emerald-500/20",
+                        stripeMerchantKey && !merchantKeyValidation.valid ? "border-red-500/50 text-red-500" : "border-neutral-800 text-emerald-500 focus:border-emerald-500"
+                      )}
+                    />
+                  </div>
+                  <AnimatePresence>
+                    {stripeMerchantKey && !merchantKeyValidation.valid && (
+                      <motion.div 
+                        initial={{ opacity: 0, y: -5 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -5 }}
+                        className="flex items-center gap-2 text-[9px] font-mono text-red-500 uppercase tracking-wider"
+                      >
+                        <AlertCircle className="w-3 h-3" />
+                        {merchantKeyValidation.msg}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+
+                <div className="space-y-3">
+                  <div className="flex justify-between items-end">
+                    <label className="text-[10px] font-mono text-neutral-500 uppercase tracking-[0.2em]">Stripe_Webhook_Secret</label>
+                    <button 
+                      onClick={() => setShowWebhookSecret(!showWebhookSecret)}
+                      className="text-[10px] font-mono text-neutral-400 hover:text-white flex items-center gap-2 transition-colors group"
+                    >
+                      {showWebhookSecret ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                      <span className="group-hover:underline">{showWebhookSecret ? 'Mask_Secret' : 'Reveal_Secret'}</span>
+                    </button>
+                  </div>
+                  <div className="relative group">
+                    <div className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-600 group-focus-within:text-emerald-500 transition-colors">
+                      <Lock className="w-5 h-5" />
+                    </div>
+                    <input 
+                      type={showWebhookSecret ? "text" : "password"}
+                      value={stripeWebhookSecret}
+                      onChange={(e) => setStripeWebhookSecret(e.target.value)}
+                      placeholder="whsec_..."
+                      className={cn(
+                        "w-full bg-black/60 border rounded-xl pl-12 pr-4 py-4 font-mono text-sm outline-none transition-all placeholder:text-neutral-800 selection:bg-emerald-500/20",
+                        stripeWebhookSecret && !webhookSecretValidation.valid ? "border-red-500/50 text-red-500" : "border-neutral-800 text-emerald-500 focus:border-emerald-500"
+                      )}
+                    />
+                  </div>
+                  <AnimatePresence>
+                    {stripeWebhookSecret && !webhookSecretValidation.valid && (
+                      <motion.div 
+                        initial={{ opacity: 0, y: -5 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -5 }}
+                        className="flex items-center gap-2 text-[9px] font-mono text-red-500 uppercase tracking-wider"
+                      >
+                        <AlertCircle className="w-3 h-3" />
+                        {webhookSecretValidation.msg}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+
                 <AnimatePresence>
                   {status !== 'idle' && (
                     <motion.div 
@@ -184,6 +400,92 @@ export default function Settings({ vpnActive, setVpnActive }: SettingsProps) {
                     </>
                   )}
                 </button>
+
+                <div className="h-px bg-neutral-800 my-8" />
+
+                <div className="space-y-3">
+                  <div className="flex justify-between items-end">
+                    <label className="text-[10px] font-mono text-neutral-500 uppercase tracking-[0.2em]">Custom_API_Key</label>
+                    <button 
+                      onClick={() => setShowCustomKey(!showCustomKey)}
+                      className="text-[10px] font-mono text-neutral-400 hover:text-white flex items-center gap-2 transition-colors group"
+                    >
+                      {showCustomKey ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                      <span className="group-hover:underline">{showCustomKey ? 'Mask_Key' : 'Reveal_Key'}</span>
+                    </button>
+                  </div>
+                  <div className="relative group">
+                    <div className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-600 group-focus-within:text-emerald-500 transition-colors">
+                      <Key className="w-5 h-5" />
+                    </div>
+                    <input 
+                      type={showCustomKey ? "text" : "password"}
+                      value={customApiKey}
+                      onChange={(e) => setCustomApiKey(e.target.value)}
+                      placeholder="ENTER_CUSTOM_API_KEY..."
+                      className={cn(
+                        "w-full bg-black/60 border rounded-xl pl-12 pr-4 py-4 font-mono text-sm outline-none transition-all placeholder:text-neutral-800 selection:bg-emerald-500/20",
+                        customApiKey && !customValidation.valid ? "border-red-500/50 text-red-500" : "border-neutral-800 text-emerald-500 focus:border-emerald-500"
+                      )}
+                    />
+                  </div>
+
+                  <AnimatePresence>
+                    {customApiKey && !customValidation.valid && (
+                      <motion.div 
+                        initial={{ opacity: 0, y: -5 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -5 }}
+                        className="flex items-center gap-2 text-[9px] font-mono text-red-500 uppercase tracking-wider"
+                      >
+                        <AlertCircle className="w-3 h-3" />
+                        {customValidation.msg}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+
+                  <AnimatePresence>
+                    {customStatus !== 'idle' && (
+                      <motion.div 
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                        className={`overflow-hidden`}
+                      >
+                        <div className={`p-5 rounded-xl border flex items-start gap-4 ${
+                          customStatus === 'success' ? 'bg-emerald-500/5 border-emerald-500/20 text-emerald-500' :
+                          customStatus === 'error' ? 'bg-red-500/5 border-red-500/20 text-red-500' :
+                          'bg-blue-500/5 border-blue-500/20 text-blue-500'
+                        }`}>
+                          {customStatus === 'success' ? <CheckCircle2 className="w-5 h-5 mt-0.5" /> : 
+                           customStatus === 'error' ? <AlertCircle className="w-5 h-5 mt-0.5" /> :
+                           <Loader2 className="w-5 h-5 mt-0.5 animate-spin" />}
+                          <div className="text-xs font-mono uppercase tracking-widest leading-relaxed">
+                            {customMessage || (customStatus === 'saving' ? 'Writing to .env file...' : '')}
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+
+                  <button 
+                    onClick={handleSaveCustom}
+                    disabled={customStatus === 'saving' || !customApiKey.trim() || !customValidation.valid}
+                    className="w-full py-5 bg-neutral-800 hover:bg-neutral-700 disabled:bg-neutral-900 disabled:text-neutral-700 text-emerald-500 font-bold font-mono uppercase tracking-[0.2em] flex items-center justify-center gap-4 transition-all rounded-xl border border-neutral-700 hover:border-emerald-500/50"
+                  >
+                    {customStatus === 'saving' ? (
+                      <>
+                        <Loader2 className="w-6 h-6 animate-spin" />
+                        Saving_Custom_Key...
+                      </>
+                    ) : (
+                      <>
+                        <Save className="w-6 h-6" />
+                        Save_Custom_API_Key
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -353,6 +655,39 @@ export default function Settings({ vpnActive, setVpnActive }: SettingsProps) {
                   <div className="w-1.5 h-1.5 bg-neutral-700 rounded-full" />
                   Access: Root_Only
                 </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-neutral-900/30 border border-neutral-800 rounded-xl p-8 backdrop-blur-sm space-y-6 relative overflow-hidden group">
+            <div className="flex items-center gap-3 text-emerald-500">
+              <Download className="w-5 h-5" />
+              <h3 className="text-xs font-mono uppercase tracking-[0.2em]">Data_Export_Engine</h3>
+            </div>
+            <div className="space-y-4">
+              <p className="text-[10px] font-mono text-neutral-500 leading-relaxed">
+                Export your operational data, mission history, and vulnerability reports in standardized formats for offline analysis.
+              </p>
+              <div className="p-4 bg-black/40 border border-neutral-800 rounded-lg space-y-3">
+                <div className="flex items-center justify-between text-[10px] font-mono">
+                  <span className="text-neutral-600 uppercase">Format</span>
+                  <span className="text-white uppercase">JSON / CSV</span>
+                </div>
+                <div className="flex items-center justify-between text-[10px] font-mono">
+                  <span className="text-neutral-600 uppercase">Scope</span>
+                  <span className="text-white uppercase">Full_History</span>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <button 
+                  onClick={() => {
+                    // Simple export logic or just a placeholder for now
+                    console.log('Exporting data...');
+                  }}
+                  className="w-full py-3 bg-emerald-500/10 border border-emerald-500/30 text-emerald-500 font-mono text-[10px] font-bold tracking-[0.2em] rounded-lg hover:bg-emerald-500/20 transition-all uppercase"
+                >
+                  Generate_Export_Package
+                </button>
               </div>
             </div>
           </div>

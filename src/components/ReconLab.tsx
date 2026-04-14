@@ -17,21 +17,20 @@ export default function ReconLab({ vpnActive, onSendToReport }: ReconLabProps) {
   const [results, setResults] = useState<AnalysisResult[]>([]);
   const [error, setError] = useState<string | null>(null);
 
+  const steps = [
+    "Initializing Neural Engine...",
+    "Parsing Abstract Syntax Tree...",
+    "Mapping Data Flow Paths...",
+    "Executing Pattern Matching...",
+    "Finalizing Vulnerability Report..."
+  ];
+
   const handleAnalyze = async () => {
     if (!code.trim()) return;
     setIsAnalyzing(true);
     setError(null);
     setScanStep(1);
     
-    // Simulate multi-stage scanning for "juice"
-    const steps = [
-      "Initializing Neural Engine...",
-      "Parsing Abstract Syntax Tree...",
-      "Mapping Data Flow Paths...",
-      "Executing Pattern Matching...",
-      "Finalizing Vulnerability Report..."
-    ];
-
     for (let i = 0; i < steps.length; i++) {
       setScanStep(i + 1);
       await new Promise(r => setTimeout(r, 800));
@@ -172,23 +171,21 @@ export default function ReconLab({ vpnActive, onSendToReport }: ReconLabProps) {
               {isAnalyzing && (
                 <div className="space-y-6 h-full flex flex-col justify-center">
                   <div className="space-y-4">
-                    <div className="flex justify-between text-[10px] font-mono uppercase tracking-widest text-emerald-500 mb-2">
-                      <span>Scanning_Progress</span>
-                      <span>{scanStep * 20}%</span>
+                    <div className="flex justify-between items-end text-[10px] font-mono uppercase tracking-widest text-emerald-500 mb-2">
+                      <div className="flex flex-col gap-1">
+                        <span className="text-neutral-500 text-[8px]">Scanning_Progress</span>
+                        <span className="text-emerald-400 animate-pulse">
+                          {steps[scanStep - 1] || "Processing..."}
+                        </span>
+                      </div>
+                      <span className="text-emerald-500/50">{scanStep * 20}%</span>
                     </div>
-                    <div className="h-2 bg-neutral-800 rounded-full overflow-hidden">
+                    <div className="h-2 bg-neutral-800 rounded-full overflow-hidden border border-neutral-800/50 p-[1px]">
                       <motion.div 
                         initial={{ width: 0 }}
                         animate={{ width: `${scanStep * 20}%` }}
-                        className="h-full bg-emerald-500 shadow-[0_0_10px_#10b981]"
+                        className="h-full bg-emerald-500 shadow-[0_0_15px_#10b981]"
                       />
-                    </div>
-                    <div className="text-center font-mono text-[10px] text-neutral-500 uppercase tracking-widest animate-pulse">
-                      {scanStep === 1 && "Initializing Neural Engine..."}
-                      {scanStep === 2 && "Parsing Abstract Syntax Tree..."}
-                      {scanStep === 3 && "Mapping Data Flow Paths..."}
-                      {scanStep === 4 && "Executing Pattern Matching..."}
-                      {scanStep === 5 && "Finalizing Vulnerability Report..."}
                     </div>
                   </div>
                 </div>

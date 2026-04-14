@@ -28,9 +28,10 @@ interface SidebarProps {
   activeTab: string;
   setActiveTab: (tab: string) => void;
   vpnActive: boolean;
+  onTerminalToggle: () => void;
 }
 
-export default function Sidebar({ activeTab, setActiveTab, vpnActive }: SidebarProps) {
+export default function Sidebar({ activeTab, setActiveTab, vpnActive, onTerminalToggle }: SidebarProps) {
   const [logs, setLogs] = useState<SystemLog[]>([]);
 
   useEffect(() => {
@@ -48,6 +49,7 @@ export default function Sidebar({ activeTab, setActiveTab, vpnActive }: SidebarP
     { id: 'recon', label: 'AI_RECON_LAB', icon: Terminal },
     { id: 'discord', label: 'DISCORD_RECON', icon: Globe },
     { id: 'programs', label: 'TARGET_PROGRAMS', icon: Target },
+    { id: 'jobs', label: 'MISSION_CONTROL', icon: Activity },
     { id: 'reports', label: 'REPORT_ARCHITECT', icon: FileText },
   ];
 
@@ -133,6 +135,13 @@ export default function Sidebar({ activeTab, setActiveTab, vpnActive }: SidebarP
       </nav>
 
       <div className="p-6 border-t border-neutral-900 space-y-3 bg-black/60">
+        <button 
+          onClick={onTerminalToggle}
+          className="w-full flex items-center gap-4 px-5 py-3 text-neutral-500 hover:text-emerald-400 hover:bg-emerald-500/5 rounded-xl transition-all group border border-transparent hover:border-emerald-500/20"
+        >
+          <Terminal className="w-4 h-4 transition-transform group-hover:scale-110" />
+          <span className="text-xs font-bold font-mono tracking-widest">OPEN_TERMINAL</span>
+        </button>
         <button 
           onClick={() => setActiveTab('settings')}
           className={cn(

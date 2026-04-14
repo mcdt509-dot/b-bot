@@ -27,9 +27,35 @@ export interface AnalysisResult {
   confidence: number;
 }
 
+export interface BotSecurityReport {
+  botName: string;
+  riskLevel: 'Low' | 'Medium' | 'High' | 'Critical';
+  excessivePermissions: string[];
+  vulnerabilities: string[];
+  recommendation: string;
+  reputationScore: number;
+  isVerified: boolean;
+  developerName: string;
+  developerReputation: string;
+}
+
 export interface SystemLog {
   id: string;
   timestamp: string;
   message: string;
   type: 'info' | 'warn' | 'error' | 'success';
+}
+
+export interface ActiveJob {
+  id: string;
+  programId: string;
+  programName: string;
+  status: 'Initializing' | 'Scanning' | 'Analyzing' | 'Exploiting' | 'Completed' | 'Failed';
+  progress: number;
+  startedAt: string;
+  vulnerabilityFound?: string;
+  severity?: string;
+  cvss?: number;
+  rewardAmount?: number;
+  claimed?: boolean;
 }

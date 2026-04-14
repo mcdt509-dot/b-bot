@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ExternalLink, Target, DollarSign, ShieldCheck, Plus, X, Loader2, AlertCircle } from 'lucide-react';
+import { ExternalLink, Target, DollarSign, ShieldCheck, Plus, X, Loader2, AlertCircle, Play, Zap } from 'lucide-react';
 import { Program } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -9,6 +9,7 @@ export default function ProgramFeed() {
   const [error, setError] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
+  const [startingJob, setStartingJob] = useState<string | null>(null);
   const itemsPerPage = 10;
 
   const [newProgram, setNewProgram] = useState<Partial<Program>>({
@@ -23,11 +24,23 @@ export default function ProgramFeed() {
     try {
       setLoading(true);
       const response = await fetch('/api/programs');
-      if (!response.ok) throw new Error('Failed to fetch programs');
+      const contentType = response.headers.get('content-type');
+      
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(`Failed to fetch programs: Status ${response.status}, Content-Type ${contentType}`);
+      }
+      
+      if (!contentType?.includes('application/json')) {
+        const text = await response.text();
+        throw new Error(`Invalid response from server: Expected JSON, got ${contentType}`);
+      }
+      
       const data = await response.json();
       setPrograms(data);
       setError(null);
     } catch (err: any) {
+      console.error("fetchPrograms error:", err);
       setError(err.message);
     } finally {
       setLoading(false);
@@ -66,6 +79,26 @@ export default function ProgramFeed() {
       });
     } catch (err: any) {
       alert(err.message);
+    }
+  };
+
+  const handleStartRecon = async (program: Program) => {
+    setStartingJob(program.id);
+    try {
+      const response = await fetch('/api/jobs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ programId: program.id, programName: program.name }),
+      });
+
+      if (!response.ok) throw new Error('Failed to start recon mission');
+      
+      // Optionally redirect to Active Jobs or show a success message
+      alert(`Mission Initialized: ${program.name}`);
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setStartingJob(null);
     }
   };
 
@@ -160,8 +193,19 @@ export default function ProgramFeed() {
                   </span>
                 </div>
                 
-                <div className="text-right text-[10px] font-mono text-neutral-500 flex items-center justify-end gap-2">
-                  {program.updatedAt}
+                <div className="text-right text-[10px] font-mono text-neutral-500 flex items-center justify-end gap-4">
+                  <span className="hidden sm:inline">{program.updatedAt}</span>
+                  <button 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleStartRecon(program);
+                    }}
+                    disabled={startingJob === program.id}
+                    className="p-2 bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 rounded hover:bg-emerald-500 hover:text-black transition-all disabled:opacity-50"
+                    title="Start Recon Mission"
+                  >
+                    {startingJob === program.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Play className="w-3 h-3" />}
+                  </button>
                   <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
                 </div>
               </div>

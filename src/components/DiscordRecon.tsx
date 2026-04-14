@@ -1,14 +1,21 @@
 import React, { useState } from 'react';
-import { Shield, Globe, Server, Lock, AlertTriangle, ExternalLink, Info, Search, Loader2, Send, ChevronRight } from 'lucide-react';
+import { Shield, Globe, Server, Lock, AlertTriangle, ExternalLink, Info, Search, Loader2, Send, ChevronRight, Bot, Cpu, Star, CheckCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { analyzeDiscordServer } from '../services/gemini';
-import { AnalysisResult } from '../types';
+import { analyzeDiscordServer, analyzeDiscordBots } from '../services/gemini';
+import { AnalysisResult, BotSecurityReport } from '../types';
+import { clsx, type ClassValue } from 'clsx';
+import { twMerge } from 'tailwind-merge';
+
+function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs));
+}
 
 export default function DiscordRecon() {
   const [serverId, setServerId] = useState('');
   const [isScanning, setIsScanning] = useState(false);
   const [scanStep, setScanStep] = useState(0);
   const [scanResults, setScanResults] = useState<AnalysisResult[]>([]);
+  const [botResults, setBotResults] = useState<BotSecurityReport[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   const domains = [
@@ -29,6 +36,7 @@ export default function DiscordRecon() {
       "Analyzing Permission Matrix...",
       "Checking Webhook Security...",
       "Auditing Bot Integrations...",
+      "Fetching Developer Intel...",
       "Generating Security Report..."
     ];
 
@@ -50,12 +58,34 @@ export default function DiscordRecon() {
           - Admin: [ADMINISTRATOR]
         Webhooks:
           - GitHub: https://discord.com/api/webhooks/... (Exposed in public channel)
-        Integrations:
-          - Custom Bot: Permissions [ADMINISTRATOR]
       `;
 
-      const analysis = await analyzeDiscordServer(serverId, mockConfig);
+      const mockBotData = `
+        Bots:
+          - Dyno: 
+            Developer: Dyno Team (Large community, verified)
+            Permissions: [ADMINISTRATOR, MANAGE_SERVER, MANAGE_ROLES, KICK_MEMBERS, BAN_MEMBERS]
+          - MEE6: 
+            Developer: MEE6 Team (Highly popular, verified)
+            Permissions: [ADMINISTRATOR, MANAGE_MESSAGES, MANAGE_CHANNELS]
+          - Custom Security Bot: 
+            Developer: Unknown (Self-hosted, unverified)
+            Permissions: [MANAGE_MESSAGES, VIEW_AUDIT_LOG]
+          - MusicBot: 
+            Developer: Open Source Community (Well-known repo)
+            Permissions: [CONNECT, SPEAK, USE_VAD]
+          - Ticket Tool: 
+            Developer: Ticket Tool Team (Verified)
+            Permissions: [MANAGE_CHANNELS, MANAGE_MESSAGES, ATTACH_FILES]
+      `;
+
+      const [analysis, bots] = await Promise.all([
+        analyzeDiscordServer(serverId, mockConfig),
+        analyzeDiscordBots(serverId, mockBotData)
+      ]);
+
       setScanResults(analysis);
+      setBotResults(bots);
     } catch (err: any) {
       setError("Neural Engine Error: Failed to complete server audit.");
     } finally {
@@ -202,13 +232,13 @@ export default function DiscordRecon() {
                 <div className="space-y-3">
                   <div className="flex justify-between items-center text-[10px] font-mono uppercase tracking-widest">
                     <span className="text-emerald-500">Scanning_In_Progress...</span>
-                    <span className="text-neutral-500">Step_{scanStep}_of_6</span>
+                    <span className="text-neutral-500">Step_{scanStep}_of_7</span>
                   </div>
                   <div className="h-1 bg-neutral-800 rounded-full overflow-hidden">
                     <motion.div 
                       className="h-full bg-emerald-500 shadow-[0_0_10px_#10b981]"
                       initial={{ width: "0%" }}
-                      animate={{ width: `${(scanStep / 6) * 100}%` }}
+                      animate={{ width: `${(scanStep / 7) * 100}%` }}
                     />
                   </div>
                   <div className="text-[9px] font-mono text-neutral-600 italic">
@@ -217,7 +247,8 @@ export default function DiscordRecon() {
                     {scanStep === 3 && "» ANALYZING_PERMISSION_MATRIX..."}
                     {scanStep === 4 && "» CHECKING_WEBHOOK_SECURITY..."}
                     {scanStep === 5 && "» AUDITING_BOT_INTEGRATIONS..."}
-                    {scanStep === 6 && "» GENERATING_SECURITY_REPORT..."}
+                    {scanStep === 6 && "» FETCHING_DEVELOPER_INTEL..."}
+                    {scanStep === 7 && "» GENERATING_SECURITY_REPORT..."}
                   </div>
                 </div>
               )}
@@ -234,39 +265,135 @@ export default function DiscordRecon() {
                   <motion.div 
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="space-y-4 pt-4 border-t border-neutral-800"
+                    className="space-y-6 pt-6 border-t border-neutral-800"
                   >
-                    <div className="text-[10px] font-mono text-neutral-400 uppercase tracking-widest mb-4">Scan_Results: {scanResults.length}_Vulnerabilities_Detected</div>
-                    <div className="grid grid-cols-1 gap-4">
-                      {scanResults.map((result, idx) => (
-                        <div key={idx} className="bg-black/40 border border-neutral-800 p-4 rounded-lg space-y-3 hover:border-emerald-500/30 transition-colors">
-                          <div className="flex justify-between items-start">
-                            <div className="space-y-1">
-                              <div className="text-sm font-bold text-white tracking-tight">{result.vulnerability}</div>
-                              <div className="flex items-center gap-3">
-                                <span className={`text-[9px] font-mono px-2 py-0.5 rounded uppercase border ${
-                                  result.severity === 'Critical' ? 'bg-red-500/10 text-red-500 border-red-500/20' :
-                                  result.severity === 'High' ? 'bg-orange-500/10 text-orange-500 border-orange-500/20' :
-                                  'bg-yellow-500/10 text-yellow-500 border-yellow-500/20'
-                                }`}>
-                                  {result.severity}
-                                </span>
-                                <span className="text-[9px] font-mono text-neutral-500 uppercase tracking-widest">CVSS: {result.cvss.toFixed(1)}</span>
+                    {/* Server Vulnerabilities */}
+                    <div className="space-y-4">
+                      <div className="text-[10px] font-mono text-neutral-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                        <Server className="w-3 h-3 text-emerald-500" />
+                        Server_Vulnerabilities: {scanResults.length}_Detected
+                      </div>
+                      <div className="grid grid-cols-1 gap-4">
+                        {scanResults.map((result, idx) => (
+                          <div key={idx} className="bg-black/40 border border-neutral-800 p-4 rounded-lg space-y-3 hover:border-emerald-500/30 transition-colors">
+                            <div className="flex justify-between items-start">
+                              <div className="space-y-1">
+                                <div className="text-sm font-bold text-white tracking-tight">{result.vulnerability}</div>
+                                <div className="flex items-center gap-3">
+                                  <span className={`text-[9px] font-mono px-2 py-0.5 rounded uppercase border ${
+                                    result.severity === 'Critical' ? 'bg-red-500/10 text-red-500 border-red-500/20' :
+                                    result.severity === 'High' ? 'bg-orange-500/10 text-orange-500 border-orange-500/20' :
+                                    'bg-yellow-500/10 text-yellow-500 border-yellow-500/20'
+                                  }`}>
+                                    {result.severity}
+                                  </span>
+                                  <span className="text-[9px] font-mono text-neutral-500 uppercase tracking-widest">CVSS: {result.cvss.toFixed(1)}</span>
+                                </div>
                               </div>
                             </div>
-                          </div>
-                          <p className="text-[11px] text-neutral-400 leading-relaxed font-mono">
-                            {result.description}
-                          </p>
-                          <div className="pt-3 border-t border-neutral-800">
-                            <div className="text-[9px] font-mono text-neutral-600 uppercase mb-1 tracking-widest">Remediation:</div>
-                            <p className="text-[11px] text-emerald-500/80 font-mono italic">
-                              {result.remediation}
+                            <p className="text-[11px] text-neutral-400 leading-relaxed font-mono">
+                              {result.description}
                             </p>
+                            <div className="pt-3 border-t border-neutral-800">
+                              <div className="text-[9px] font-mono text-neutral-600 uppercase mb-1 tracking-widest">Remediation:</div>
+                              <p className="text-[11px] text-emerald-500/80 font-mono italic">
+                                {result.remediation}
+                              </p>
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        ))}
+                      </div>
                     </div>
+
+                    {/* Bot Security Posture */}
+                    {botResults.length > 0 && (
+                      <div className="space-y-4 pt-6 border-t border-neutral-800">
+                        <div className="text-[10px] font-mono text-neutral-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                          <Bot className="w-3 h-3 text-blue-500" />
+                          Bot_Security_Posture: {botResults.length}_Bots_Audited
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {botResults.map((bot, idx) => (
+                            <div key={idx} className="bg-black/40 border border-neutral-800 p-4 rounded-lg space-y-4 hover:border-blue-500/30 transition-colors">
+                              <div className="flex justify-between items-start">
+                                <div className="flex items-center gap-3">
+                                  <div className="p-2 bg-blue-500/10 rounded border border-blue-500/20">
+                                    <Cpu className="w-4 h-4 text-blue-500" />
+                                  </div>
+                                  <div>
+                                    <div className="flex items-center gap-2">
+                                      <div className="text-sm font-bold text-white">{bot.botName}</div>
+                                      {bot.isVerified && (
+                                        <CheckCircle className="w-3 h-3 text-blue-500 fill-blue-500/20" />
+                                      )}
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <span className={`text-[8px] font-mono px-1.5 py-0.5 rounded uppercase border ${
+                                        bot.riskLevel === 'Critical' ? 'bg-red-500/10 text-red-500 border-red-500/20' :
+                                        bot.riskLevel === 'High' ? 'bg-orange-500/10 text-orange-500 border-orange-500/20' :
+                                        bot.riskLevel === 'Medium' ? 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20' :
+                                        'bg-emerald-500/10 text-emerald-500 border-emerald-500/20'
+                                      }`}>
+                                        Risk: {bot.riskLevel}
+                                      </span>
+                                      <div className="flex items-center gap-1 text-[8px] font-mono text-neutral-500 uppercase">
+                                        <Star className={cn("w-2.5 h-2.5", bot.reputationScore > 70 ? "text-yellow-500 fill-yellow-500/20" : "text-neutral-600")} />
+                                        Rep: {bot.reputationScore}/100
+                                      </div>
+                                    </div>
+                                    <div className="text-[9px] font-mono text-neutral-500 mt-1">
+                                      Dev: <span className="text-white">{bot.developerName}</span>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="space-y-3">
+                                <div>
+                                  <div className="text-[9px] font-mono text-neutral-600 uppercase mb-1 tracking-widest">Developer_Reputation:</div>
+                                  <p className="text-[10px] text-neutral-400 font-mono italic">
+                                    {bot.developerReputation}
+                                  </p>
+                                </div>
+
+                                {bot.excessivePermissions.length > 0 && (
+                                  <div>
+                                    <div className="text-[9px] font-mono text-red-400/70 uppercase mb-1 tracking-widest">Excessive_Permissions:</div>
+                                    <div className="flex flex-wrap gap-1">
+                                      {bot.excessivePermissions.map((perm, i) => (
+                                        <span key={i} className="text-[8px] font-mono bg-red-500/5 text-red-400 border border-red-500/10 px-1.5 py-0.5 rounded">
+                                          {perm}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+
+                                {bot.vulnerabilities.length > 0 && (
+                                  <div>
+                                    <div className="text-[9px] font-mono text-orange-400/70 uppercase mb-1 tracking-widest">Known_Vulnerabilities:</div>
+                                    <ul className="space-y-1">
+                                      {bot.vulnerabilities.map((vuln, i) => (
+                                        <li key={i} className="text-[10px] text-neutral-400 font-mono flex gap-2">
+                                          <span className="text-orange-500">!</span> {vuln}
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                )}
+
+                                <div className="pt-3 border-t border-neutral-800">
+                                  <div className="text-[9px] font-mono text-neutral-600 uppercase mb-1 tracking-widest">Recommendation:</div>
+                                  <p className="text-[10px] text-blue-400/80 font-mono italic">
+                                    {bot.recommendation}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </motion.div>
                 )}
               </AnimatePresence>

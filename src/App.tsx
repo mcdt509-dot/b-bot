@@ -4,15 +4,29 @@ import Dashboard from './components/Dashboard';
 import ReconLab from './components/ReconLab';
 import ProgramFeed from './components/ProgramFeed';
 import ReportArchitect from './components/ReportArchitect';
+import ActiveJobs from './components/ActiveJobs';
 import Settings from './components/Settings';
 import DiscordRecon from './components/DiscordRecon';
+import Terminal from './components/Terminal';
 import { motion, AnimatePresence } from 'motion/react';
+import { useEffect } from 'react';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [vpnActive, setVpnActive] = useState(false);
   const [sharedAnalysis, setSharedAnalysis] = useState<any>(null);
   const [reportHistory, setReportHistory] = useState<any[]>([]);
+  const [isTerminalOpen, setIsTerminalOpen] = useState(false);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey && e.key === '`') {
+        setIsTerminalOpen(prev => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   const handleSendToReport = (analysis: any) => {
     setSharedAnalysis(analysis);
@@ -26,13 +40,15 @@ export default function App() {
   const renderContent = () => {
     switch (activeTab) {
       case 'dashboard':
-        return <Dashboard vpnActive={vpnActive} />;
+        return <Dashboard vpnActive={vpnActive} setActiveTab={setActiveTab} />;
       case 'recon':
         return <ReconLab vpnActive={vpnActive} onSendToReport={handleSendToReport} />;
       case 'discord':
         return <DiscordRecon />;
       case 'programs':
         return <ProgramFeed />;
+      case 'jobs':
+        return <ActiveJobs />;
       case 'reports':
         return (
           <ReportArchitect 
@@ -44,13 +60,18 @@ export default function App() {
       case 'settings':
         return <Settings vpnActive={vpnActive} setVpnActive={setVpnActive} />;
       default:
-        return <Dashboard vpnActive={vpnActive} />;
+        return <Dashboard vpnActive={vpnActive} setActiveTab={setActiveTab} />;
     }
   };
 
   return (
     <div className="flex h-screen bg-black text-white overflow-hidden selection:bg-emerald-500/30 selection:text-emerald-200">
-      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} vpnActive={vpnActive} />
+      <Sidebar 
+        activeTab={activeTab} 
+        setActiveTab={setActiveTab} 
+        vpnActive={vpnActive} 
+        onTerminalToggle={() => setIsTerminalOpen(true)}
+      />
       
       <main className="flex-1 relative overflow-hidden">
         <AnimatePresence mode="wait">
@@ -65,6 +86,8 @@ export default function App() {
             {renderContent()}
           </motion.div>
         </AnimatePresence>
+
+        <Terminal isOpen={isTerminalOpen} onClose={() => setIsTerminalOpen(false)} />
 
         {/* v4.0 Badge */}
         <div className="absolute bottom-4 right-4 z-50 pointer-events-none">

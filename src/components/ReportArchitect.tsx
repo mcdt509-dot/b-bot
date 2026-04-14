@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { FileText, Copy, Check, Loader2, Sparkles, Send, Layout, Shield, Cpu, AlertTriangle, X, ChevronRight } from 'lucide-react';
+import { FileText, Copy, Check, Loader2, Sparkles, Send, Layout, Shield, Cpu, AlertTriangle, X, ChevronRight, Plus, Trash2, Globe, Lock } from 'lucide-react';
 import { draftReport } from '../services/gemini';
 import { AnalysisResult } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
@@ -8,7 +8,48 @@ const PLATFORMS = [
   { id: 'h1', name: 'HackerOne', icon: Shield },
   { id: 'bc', name: 'Bugcrowd', icon: Layout },
   { id: 'int', name: 'Intigriti', icon: Cpu },
+  { id: 'ywh', name: 'YesWeHack', icon: Globe },
+  { id: 'priv', name: 'Private', icon: Lock },
   { id: 'std', name: 'Standard', icon: FileText }
+];
+
+const VULNERABILITY_TYPES = [
+  { 
+    id: 'xss', 
+    name: 'Cross-Site Scripting (XSS)', 
+    defaultDescription: 'The application fails to properly sanitize user-supplied input before rendering it in the browser, allowing for the execution of arbitrary JavaScript.', 
+    defaultRemediation: 'Implement context-aware output encoding and use a strong Content Security Policy (CSP).' 
+  },
+  { 
+    id: 'sqli', 
+    name: 'SQL Injection (SQLi)', 
+    defaultDescription: 'User-controlled input is directly concatenated into SQL queries, allowing an attacker to manipulate database queries and potentially extract sensitive data.', 
+    defaultRemediation: 'Use parameterized queries or prepared statements for all database interactions.' 
+  },
+  { 
+    id: 'csrf', 
+    name: 'Cross-Site Request Forgery (CSRF)', 
+    defaultDescription: 'The application lacks protection against CSRF, allowing an attacker to perform actions on behalf of an authenticated user without their consent.', 
+    defaultRemediation: 'Implement anti-CSRF tokens for all state-changing operations.' 
+  },
+  { 
+    id: 'idor', 
+    name: 'Insecure Direct Object Reference (IDOR)', 
+    defaultDescription: 'The application exposes direct references to internal objects (e.g., database IDs) without proper authorization checks, allowing users to access data belonging to others.', 
+    defaultRemediation: 'Implement robust server-side authorization checks for every object access request.' 
+  },
+  { 
+    id: 'ssrf', 
+    name: 'Server-Side Request Forgery (SSRF)', 
+    defaultDescription: 'The application allows users to specify a URL that the server then fetches, which can be abused to access internal services or perform port scanning from the server\'s perspective.', 
+    defaultRemediation: 'Implement a strict allowlist for outgoing requests and avoid fetching user-supplied URLs directly.' 
+  },
+  { 
+    id: 'custom', 
+    name: 'Custom Vulnerability', 
+    defaultDescription: '', 
+    defaultRemediation: '' 
+  }
 ];
 
 interface ReportArchitectProps {
@@ -20,10 +61,12 @@ interface ReportArchitectProps {
 export default function ReportArchitect({ initialAnalysis, onSaveReport, history = [] }: ReportArchitectProps) {
   const [programName, setProgramName] = useState('');
   const [vulnerability, setVulnerability] = useState(initialAnalysis?.vulnerability || '');
+  const [vulnerabilityType, setVulnerabilityType] = useState('custom');
   const [severity, setSeverity] = useState(initialAnalysis?.severity || 'Medium');
   const [description, setDescription] = useState(initialAnalysis?.description || '');
   const [remediation, setRemediation] = useState(initialAnalysis?.remediation || '');
   const [platform, setPlatform] = useState('h1');
+  const [customFields, setCustomFields] = useState<{ key: string, value: string }[]>([]);
   const [isDrafting, setIsDrafting] = useState(false);
   const [report, setReport] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -39,6 +82,32 @@ export default function ReportArchitect({ initialAnalysis, onSaveReport, history
     }
   }, [initialAnalysis]);
 
+  const handleVulnerabilityTypeChange = (typeId: string) => {
+    setVulnerabilityType(typeId);
+    const template = VULNERABILITY_TYPES.find(t => t.id === typeId);
+    if (template && typeId !== 'custom') {
+      setDescription(template.defaultDescription);
+      setRemediation(template.defaultRemediation);
+      if (!vulnerability) {
+        setVulnerability(template.name);
+      }
+    }
+  };
+
+  const addCustomField = () => {
+    setCustomFields([...customFields, { key: '', value: '' }]);
+  };
+
+  const updateCustomField = (index: number, key: string, value: string) => {
+    const newFields = [...customFields];
+    newFields[index] = { key, value };
+    setCustomFields(newFields);
+  };
+
+  const removeCustomField = (index: number) => {
+    setCustomFields(customFields.filter((_, i) => i !== index));
+  };
+
   const handleDraft = async () => {
     setIsDrafting(true);
     setError(null);
@@ -52,7 +121,8 @@ export default function ReportArchitect({ initialAnalysis, onSaveReport, history
         cvss: severity === 'Critical' ? 9.8 : severity === 'High' ? 8.5 : severity === 'Medium' ? 5.5 : 3.0
       };
       const platformName = PLATFORMS.find(p => p.id === platform)?.name || 'Standard';
-      const draftedReport = await draftReport(analysis, programName, platformName);
+      const typeName = VULNERABILITY_TYPES.find(t => t.id === vulnerabilityType)?.name || 'General';
+      const draftedReport = await draftReport(analysis, programName, platformName, typeName, customFields);
       setReport(draftedReport);
     } catch (err: any) {
       const errorStr = typeof err === 'string' ? err : JSON.stringify(err);
@@ -122,7 +192,7 @@ export default function ReportArchitect({ initialAnalysis, onSaveReport, history
           <div className="space-y-6">
             <div>
               <label className="text-[10px] font-mono text-neutral-500 uppercase tracking-[0.2em] mb-3 block">Target_Platform</label>
-              <div className="grid grid-cols-4 gap-3">
+              <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
                 {PLATFORMS.map((p) => (
                   <button
                     key={p.id}
@@ -152,6 +222,21 @@ export default function ReportArchitect({ initialAnalysis, onSaveReport, history
                 />
               </div>
               <div>
+                <label className="text-[10px] font-mono text-neutral-500 uppercase tracking-[0.2em] mb-2 block">Vulnerability_Template</label>
+                <select
+                  value={vulnerabilityType}
+                  onChange={(e) => handleVulnerabilityTypeChange(e.target.value)}
+                  className="w-full bg-black/60 border border-neutral-800 rounded-lg px-4 py-3 font-mono text-sm text-white focus:border-emerald-500 outline-none transition-all appearance-none cursor-pointer"
+                >
+                  {VULNERABILITY_TYPES.map(t => (
+                    <option key={t.id} value={t.id}>{t.name}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-6">
+              <div>
                 <label className="text-[10px] font-mono text-neutral-500 uppercase tracking-[0.2em] mb-2 block">Severity_Rating</label>
                 <select
                   value={severity}
@@ -164,17 +249,16 @@ export default function ReportArchitect({ initialAnalysis, onSaveReport, history
                   <option>Critical</option>
                 </select>
               </div>
-            </div>
-
-            <div>
-              <label className="text-[10px] font-mono text-neutral-500 uppercase tracking-[0.2em] mb-2 block">Vulnerability_Type</label>
-              <input
-                type="text"
-                value={vulnerability}
-                onChange={(e) => setVulnerability(e.target.value)}
-                placeholder="e.g. Stored XSS in Profile Comments"
-                className="w-full bg-black/60 border border-neutral-800 rounded-lg px-4 py-3 font-mono text-sm text-white focus:border-emerald-500 outline-none transition-all placeholder:text-neutral-800"
-              />
+              <div>
+                <label className="text-[10px] font-mono text-neutral-500 uppercase tracking-[0.2em] mb-2 block">Vulnerability_Title</label>
+                <input
+                  type="text"
+                  value={vulnerability}
+                  onChange={(e) => setVulnerability(e.target.value)}
+                  placeholder="e.g. Stored XSS in Profile Comments"
+                  className="w-full bg-black/60 border border-neutral-800 rounded-lg px-4 py-3 font-mono text-sm text-white focus:border-emerald-500 outline-none transition-all placeholder:text-neutral-800"
+                />
+              </div>
             </div>
 
             <div>
@@ -195,6 +279,44 @@ export default function ReportArchitect({ initialAnalysis, onSaveReport, history
                 placeholder="Recommended fix actions..."
                 className="w-full bg-black/60 border border-neutral-800 rounded-lg px-4 py-3 font-mono text-sm text-white focus:border-emerald-500 outline-none transition-all h-24 resize-none placeholder:text-neutral-800"
               />
+            </div>
+
+            <div className="space-y-4">
+              <div className="flex justify-between items-center">
+                <label className="text-[10px] font-mono text-neutral-500 uppercase tracking-[0.2em]">Custom_Fields</label>
+                <button 
+                  onClick={addCustomField}
+                  className="text-[10px] font-mono text-emerald-500 hover:text-emerald-400 flex items-center gap-1 uppercase tracking-widest"
+                >
+                  <Plus className="w-3 h-3" /> Add_Field
+                </button>
+              </div>
+              <div className="space-y-3">
+                {customFields.map((field, index) => (
+                  <div key={index} className="flex gap-3 items-start">
+                    <input
+                      type="text"
+                      value={field.key}
+                      onChange={(e) => updateCustomField(index, e.target.value, field.value)}
+                      placeholder="Field Name"
+                      className="flex-1 bg-black/40 border border-neutral-800 rounded-lg px-3 py-2 font-mono text-[10px] text-white focus:border-emerald-500 outline-none"
+                    />
+                    <input
+                      type="text"
+                      value={field.value}
+                      onChange={(e) => updateCustomField(index, field.key, e.target.value)}
+                      placeholder="Field Value"
+                      className="flex-[2] bg-black/40 border border-neutral-800 rounded-lg px-3 py-2 font-mono text-[10px] text-white focus:border-emerald-500 outline-none"
+                    />
+                    <button 
+                      onClick={() => removeCustomField(index)}
+                      className="p-2 text-neutral-600 hover:text-red-500 transition-colors"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
             </div>
 
             <button
